@@ -1,118 +1,91 @@
-import { Comment } from '../models/Comment';
-import { Post } from '../models/Post';
+import Comment from '../models/Comment';
+import Post from '../models/Post';
 
-const posts: Post[] = [];
-
-// * UTILS
-export const getPost = (id: string) => {
-  return posts.find((post) => post.id === id);
+export const getPosts = async (req, res) => {
+  try {
+    const posts = await Post.find().populate('comments');
+    res.status(200).json(posts);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
-// * ROUTES HANDLERS
-export const getPosts = (req, res) => {
-  res.status(200).json(posts);
-};
-
-export const getPostsByCategory = (req, res) => {
+export const getPostsByCategory = async (req, res) => {
   const { category } = req.params;
 
-  const categorizedPosts = posts.map((post) => post.category === category);
-  res.status(200).json(categorizedPosts);
+  try {
+    const posts = await Post.find({ category }).populate('category');
+    res.status(200).json(posts);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
-export const getPostById = (req, res) => {
+export const getPostById = async (req, res) => {
   const { id } = req.params;
 
-  const post = getPost(id);
-  if (!post) {
-    res.status(404).json({ message: 'Post not found' });
-  }
+  try {
+    const post = await Post.findById(id).populate('category');
+    if (!post) {
+      res.status(404).json({ message: 'Post not found' });
+    }
 
-  // * makes sure the category field is an object
-  if (typeof post.category === 'string') {
-    post.category = {
-      id: post.category,
-      name: 'something'
-    };
+    res.status(200).json(post);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
-
-  res.status(200).json(post);
 };
 
-export const createPost = (req, res) => {
-  const { title, image, description, category } = req.body;
-
-  if (!title || !image || !description || !category) {
-    res.status(400).json({ message: 'Some fields are missing' });
+export const createPost = async (req, res) => {
+  try {
+    const post = await Post.create(req.body);
+    res.status(201).json(post);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
-
-  const newPost: Post = {
-    id: Date.now().toString(),
-    title,
-    image,
-    description,
-    category,
-    comments: []
-  };
-
-  posts.push(newPost);
-  res.status(201).json(newPost);
 };
 
-export const createCommentOnPost = (req, res) => {
-  const { id } = req.params;
-  const { author, content } = req.body;
-
-  if (!author || !content) {
-    res.status(400).json({ message: 'Some fields are missing' });
-  }
-
-  const post = getPost(id);
-  if (!post) {
-    res.status(404).json({ message: 'Post not found' });
-  }
-
-  const newComment: Comment = {
-    id: Date.now().toString(),
-    author,
-    content
-  };
-
-  post.comments.push(newComment);
-  res.status(201).json(newComment);
-};
-
-export const updatePostById = (req, res) => {
-  const { id } = req.params;
-  const { title, image, description, category } = req.body;
-
-  const postIndex = posts.findIndex((post) => post.id === id);
-  if (postIndex === -1) {
-    res.status(404).json({ message: 'Post not found' });
-  }
-
-  const post = posts[postIndex];
-  const updatedPost = {
-    ...posts[postIndex],
-    title: title ?? post.title,
-    image: image ?? post.image,
-    description: description ?? post.description,
-    category: category ?? post.category,
-    comments: post.comments
-  };
-
-  posts[postIndex] = updatedPost;
-  res.status(200).json(updatedPost);
-};
-
-export const deletePostById = (req, res) => {
+export const createCommentOnPost = async (req, res) => {
   const { id } = req.params;
 
-  const postIndex = posts.findIndex((post) => post.id === id);
-  if (postIndex === -1) {
-    res.status(404).json({ message: 'Post not found' });
-  }
+  try {
+    // * creates a new comment
+    const comment = await new Comment(req.body).save();
 
-  const deletedPosts = posts.splice(postIndex, 1);
-  res.status(200).send(deletedPosts[0]);
+    // * adds the new comment id to the corresponding post
+    await Post.findByIdAndUpdate(id, { $push: { comments: comment._id } });
+    res.status(201).json(comment);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const updatePostById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const post = await Post.findByIdAndUpdate(id, req.body, { new: true });
+    if (!post) {
+      res.status(404).json({ message: 'Post not found' });
+    }
+
+    res.status(200).json(post);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const deletePostById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const post = await Post.findByIdAndDelete(id);
+    if (!post) {
+      res.status(404).json({ message: 'Post not found' });
+    }
+
+    res.status(200).json(post);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
